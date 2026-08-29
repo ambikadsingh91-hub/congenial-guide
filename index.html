@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>LOT Shop</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<header class="navbar">
+
+    <div class="logo">
+        <span>£</span> LOT Shop
+    </div>
+
+    <div class="search-box">
+        <input
+            id="searchInput"
+            type="text"
+            placeholder="Search items..."
+            oninput="searchItems()"
+        >
+    </div>
+
+    <nav>
+        <a href="#home">Home</a>
+        <a href="#marketplace">Marketplace</a>
+        <a href="#sell">Sell</a>
+        <button onclick="openLogin()">Login</button>
+    </nav>
+
+</header>
+
+
+<main>
+
+<section id="home" class="hero">
+
+    <div>
+        <p class="tag">THE NEXT-GEN MARKETPLACE</p>
+
+        <h1>
+            Buy. Sell.<br>
+            <span>Earn LOT.</span>
+        </h1>
+
+        <p class="hero-text">
+            Discover amazing items from the LOT community
+            and trade using LOT currency.
+        </p>
+
+        <div class="hero-buttons">
+            <a href="#marketplace" class="primary-btn">
+                Explore Marketplace
+            </a>
+
+            <a href="#sell" class="secondary-btn">
+                Sell an Item
+            </a>
+        </div>
+    </div>
+
+</section>
+
+
+<section id="marketplace" class="marketplace">
+
+    <div class="section-title">
+        <div>
+            <p class="tag">MARKETPLACE</p>
+            <h2>Featured Items</h2>
+        </div>
+
+        <select id="categoryFilter" onchange="filterItems()">
+            <option value="all">All Categories</option>
+            <option value="weapons">Weapons</option>
+            <option value="collectibles">Collectibles</option>
+            <option value="clothing">Clothing</option>
+            <option value="other">Other</option>
+        </select>
+    </div>
+
+
+    <div id="items" class="items-grid"></div>
+
+</section>
+
+
+<section id="sell" class="sell-section">
+
+    <div class="sell-card">
+
+        <p class="tag">SELL ON LOT SHOP</p>
+
+        <h2>Have something to sell?</h2>
+
+        <p>
+            Create your own listing and reach buyers
+            across the LOT marketplace.
+        </p>
+
+        <button class="primary-btn" onclick="openLogin()">
+            Create Listing
+        </button>
+
+    </div>
+
+</section>
+
+</main>
+
+
+<footer>
+
+    <div class="logo">
+        <span>£</span> LOT Shop
+    </div>
+
+    <p>© 2026 LOT Shop. All rights reserved.</p>
+
+</footer>
+
+
+<!-- LOGIN MODAL -->
+
+<div id="loginModal" class="modal">
+
+    <div class="modal-card">
+
+        <button class="close" onclick="closeLogin()">×</button>
+
+        <div class="logo">
+            <span>£</span> LOT Shop
+        </div>
+
+        <h2>Welcome back</h2>
+
+        <p class="muted">
+            Login with your LOT account.
+        </p>
+
+        <input
+            id="username"
+            class="form-input"
+            type="text"
+            placeholder="Username or email"
+        >
+
+        <input
+            id="password"
+            class="form-input"
+            type="password"
+            placeholder="Password"
+        >
+
+        <button class="primary-btn full" onclick="login()">
+            Login
+        </button>
+
+        <p id="loginMessage"></p>
+
+    </div>
+
+</div>
+
+
+<!-- PURCHASE MODAL -->
+
+<div id="purchaseModal" class="modal">
+
+    <div class="modal-card">
+
+        <button class="close" onclick="closePurchase()">×</button>
+
+        <h2 id="purchaseName"></h2>
+
+        <div class="purchase-info">
+
+            <p>
+                Price:
+                <strong id="purchasePrice"></strong> LOT
+            </p>
+
+            <p>
+                Stock:
+                <strong id="purchaseStock"></strong>
+            </p>
+
+            <p>
+                Your balance:
+                <strong id="purchaseBalance"></strong> LOT
+            </p>
+
+        </div>
+
+        <button
+            id="confirmPurchase"
+            class="primary-btn full"
+            onclick="confirmBuy()"
+        >
+            Confirm Purchase
+        </button>
+
+        <button
+            class="secondary-btn full"
+            onclick="closePurchase()"
+        >
+            Cancel
+        </button>
+
+    </div>
+
+</div>
+
+
+<div id="toast"></div>
+
+
+<script src="script.js"></script>
+
+</body>
+</html>
