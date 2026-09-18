@@ -1,6 +1,7 @@
-// ===============================
-// FIREBASE CONFIG — ADD ONLY
-// ===============================
+// ============================================================
+// LOT SHOP — FIREBASE VERSION
+// Existing UI/style preserved
+// ============================================================
 
 const firebaseConfig = {
   apiKey: "AIzaSyD89JlsSXpaAse-ZgUXnlUIqqlTPe-6Bys",
@@ -10,27 +11,27 @@ const firebaseConfig = {
   messagingSenderId: "909823166989",
   appId: "1:909823166989:web:288001e0e37c2fa7282344"
 };
-// LOT SHOP - FIXED AUTHENTICATION VERSION
+
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
+
+const auth = firebase.auth();
+const db = firebase.firestore();
 
 let currentUser = null;
+let localListings = [];
 
-const DEMO_ADMIN_USERNAME = "Virat";
-const DEMO_ADMIN_PASSWORD = "9825727203";
-
-let localUsers = JSON.parse(
-  localStorage.getItem("lot_users") || "[]"
-);
-
-let localListings = JSON.parse(
-  localStorage.getItem("lot_listings") || "[]"
-);
+let selectedItem = null;
+let purchaseInProgress = false;
 
 
-// ===============================
+// ============================================================
 // AUTH TAB SWITCHING
-// ===============================
+// ============================================================
 
 function showAuth(type) {
+
   const loginForm = document.getElementById("loginForm");
   const signupForm = document.getElementById("signupForm");
 
@@ -38,14 +39,15 @@ function showAuth(type) {
   const signupTab = document.getElementById("signupTab");
 
   if (type === "login") {
+
     loginForm.classList.remove("hidden");
     signupForm.classList.add("hidden");
 
     loginTab.classList.add("active");
     signupTab.classList.remove("active");
-  }
 
-  if (type === "signup") {
+  } else {
+
     loginForm.classList.add("hidden");
     signupForm.classList.remove("hidden");
 
@@ -55,14 +57,15 @@ function showAuth(type) {
 }
 
 
-// ===============================
+// ============================================================
 // LOGIN
-// ===============================
+// ============================================================
 
 async function login(event) {
+
   event.preventDefault();
 
-  const username =
+  const usernameOrEmail =
     document.getElementById("loginUser").value.trim();
 
   const password =
@@ -73,86 +76,78 @@ async function login(event) {
 
   message.textContent = "";
 
-  if (!username || !password) {
+  if (!usernameOrEmail || !password) {
     message.textContent = "Please enter your login details.";
     return;
   }
 
+  try {
 
-  // DEMO ADMIN LOGIN
+    let email = usernameOrEmail;
 
-  if (
-    username.toLowerCase() ===
-      DEMO_ADMIN_USERNAME.toLowerCase() &&
-    password === DEMO_ADMIN_PASSWORD
-  ) {
+    // If user entered username instead of email,
+    // find their email in Firestore.
+    if (!usernameOrEmail.includes("@")) {
 
-    currentUser = {
-      id: "admin-virat",
-      username: "Virat",
-      balance: 100000,
-      role: "admin",
-      isAdmin: true,
-      purchases: 0
-    };
+      const snapshot = await db
+        .collection("users")
+        .where("username", "==", usernameOrEmail)
+        .limit(1)
+        .get();
 
-    sessionStorage.setItem(
-      "lot_current_user",
-      JSON.stringify(currentUser)
-    );
+      if (snapshot.empty) {
+        message.textContent =
+          "Invalid username/email or password.";
+        return;
+      }
+
+      email = snapshot.docs[0].data().email;
+    }
+
+    // Firebase Authentication handles the password.
+    const credential =
+      await auth.signInWithEmailAndPassword(
+        email,
+        password
+      );
+
+    await loadCurrentUser(credential.user.uid);
 
     enterMarketplace();
 
-    return;
+  } catch (error) {
+
+    console.error(error);
+
+    if (
+      error.code === "auth/invalid-credential" ||
+      error.code === "auth/user-not-found" ||
+      error.code === "auth/wrong-password"
+    ) {
+
+      message.textContent =
+        "Invalid username/email or password.";
+
+    } else if (error.code === "auth/too-many-requests") {
+
+      message.textContent =
+        "Too many attempts. Please try again later.";
+
+    } else {
+
+      message.textContent =
+        error.message || "Login failed.";
+    }
   }
-
-
-  // LOCAL DEVELOPMENT USER
-
-  const user = localUsers.find(
-    u =>
-      (
-        u.username.toLowerCase() ===
-          username.toLowerCase() ||
-        u.email.toLowerCase() ===
-          username.toLowerCase()
-      ) &&
-      u.password === password
-  );
-
-
-  if (!user) {
-    message.textContent =
-      "Invalid username/email or password.";
-    return;
-  }
-
-
-  currentUser = {
-    id: user.id,
-    username: user.username,
-    balance: user.balance || 0,
-    role: "user",
-    isAdmin: false,
-    purchases: user.purchases || 0
-  };
-
-
-  sessionStorage.setItem(
-    "lot_current_user",
-    JSON.stringify(currentUser)
-  );
-
-
-  enterMarketplace();
 }
 
 
-// ===============================
+// ============================================================
 // SIGN UP
-// ===============================
+// ============================================================
 
 async function signup(event) {
+
   event.preventDefault();
 
   const username =
@@ -172,13 +167,11 @@ async function signup(event) {
 
   message.textContent = "";
 
-
   if (username.length < 3) {
     message.textContent =
       "Username must be at least 3 characters.";
     return;
   }
-
 
   if (!email.includes("@")) {
     message.textContent =
@@ -186,13 +179,11 @@ async function signup(event) {
     return;
   }
 
-
   if (password.length < 8) {
     message.textContent =
       "Password must be at least 8 characters.";
     return;
   }
-
 
   if (password !== confirm) {
     message.textContent =
@@ -200,77 +191,147 @@ async function signup(event) {
     return;
   }
 
-
-  if (
-    username.toLowerCase() ===
-    DEMO_ADMIN_USERNAME.toLowerCase()
-  ) {
+  if (username.toLowerCase() === "virat") {
     message.textContent =
       "That username is reserved.";
     return;
   }
 
+  try {
 
-  const alreadyExists = localUsers.some(
-    u =>
-      u.username.toLowerCase() ===
-        username.toLowerCase() ||
-      u.email.toLowerCase() ===
-        email.toLowerCase()
-  );
+    // Check username first.
+    const usernameCheck = await db
+      .collection("users")
+      .where("username", "==", username)
+      .limit(1)
+      .get();
 
+    if (!usernameCheck.empty) {
+      message.textContent =
+        "Username already exists.";
+      return;
+    }
 
-  if (alreadyExists) {
-    message.textContent =
-      "Username or email already exists.";
-    return;
+    // Create Firebase Authentication account.
+    const credential =
+      await auth.createUserWithEmailAndPassword(
+        email,
+        password
+      );
+
+    const uid = credential.user.uid;
+
+    // Create the Firestore user record.
+    await db
+      .collection("users")
+      .doc(uid)
+      .set({
+
+        username: username,
+
+        email: email,
+
+        balance: 0,
+
+        role: "user",
+
+        purchases: 0,
+
+        createdAt:
+          firebase.firestore.FieldValue.serverTimestamp()
+      });
+
+    currentUser = {
+
+      id: uid,
+
+      username: username,
+
+      email: email,
+
+      balance: 0,
+
+      role: "user",
+
+      isAdmin: false,
+
+      purchases: 0
+    };
+
+    enterMarketplace();
+
+  } catch (error) {
+
+    console.error(error);
+
+    if (error.code === "auth/email-already-in-use") {
+
+      message.textContent =
+        "That email is already registered.";
+
+    } else if (error.code === "auth/invalid-email") {
+
+      message.textContent =
+        "Enter a valid email address.";
+
+    } else if (error.code === "auth/weak-password") {
+
+      message.textContent =
+        "Password must be at least 8 characters.";
+
+    } else {
+
+      message.textContent =
+        error.message || "Signup failed.";
+    }
   }
-
-
-  const user = {
-    id: Date.now().toString(),
-    username: username,
-    email: email,
-    password: password,
-    balance: 0,
-    purchases: 0
-  };
-
-
-  localUsers.push(user);
-
-
-  localStorage.setItem(
-    "lot_users",
-    JSON.stringify(localUsers)
-  );
-
-
-  currentUser = {
-    id: user.id,
-    username: user.username,
-    balance: 0,
-    role: "user",
-    isAdmin: false,
-    purchases: 0
-  };
-
-
-  sessionStorage.setItem(
-    "lot_current_user",
-    JSON.stringify(currentUser)
-  );
-
-
-  enterMarketplace();
 }
 
 
-// ===============================
-// OPEN MARKETPLACE
-// ===============================
+// ============================================================
+// LOAD CURRENT USER
+// ============================================================
 
-function enterMarketplace() {
+async function loadCurrentUser(uid) {
+
+  const doc =
+    await db.collection("users").doc(uid).get();
+
+  if (!doc.exists) {
+
+    // Safety fallback if the Auth account has no
+    // corresponding Firestore user document.
+    throw new Error(
+      "Your account exists, but your LOT Shop profile was not found."
+    );
+  }
+
+  const data = doc.data();
+
+  currentUser = {
+
+    id: uid,
+
+    username: data.username || "User",
+
+    email: data.email || auth.currentUser.email,
+
+    balance: Number(data.balance || 0),
+
+    role: data.role || "user",
+
+    isAdmin: data.role === "admin",
+
+    purchases: Number(data.purchases || 0)
+  };
+}
+
+
+// ============================================================
+// OPEN MARKETPLACE
+// ============================================================
+
+async function enterMarketplace() {
 
   document
     .getElementById("authScreen")
@@ -280,10 +341,9 @@ function enterMarketplace() {
     .getElementById("app")
     .classList.remove("hidden");
 
-
   updateAccount();
 
-  loadListings();
+  await loadListings();
 
   renderMarketplace();
 
@@ -291,18 +351,20 @@ function enterMarketplace() {
 }
 
 
-// ===============================
+// ============================================================
 // LOGOUT
-// ===============================
+// ============================================================
 
-function logout() {
+async function logout() {
+
+  try {
+    await auth.signOut();
+  } catch (error) {
+    console.error(error);
+  }
 
   currentUser = null;
-
-  sessionStorage.removeItem(
-    "lot_current_user"
-  );
-
+  localListings = [];
 
   document
     .getElementById("app")
@@ -311,7 +373,6 @@ function logout() {
   document
     .getElementById("authScreen")
     .classList.remove("hidden");
-
 
   document.getElementById("loginUser").value = "";
   document.getElementById("loginPass").value = "";
@@ -320,9 +381,9 @@ function logout() {
 }
 
 
-// ===============================
+// ============================================================
 // ACCOUNT
-// ===============================
+// ============================================================
 
 function updateAccount() {
 
@@ -334,65 +395,82 @@ function updateAccount() {
     currentUser.username +
     (currentUser.isAdmin ? " • Admin" : "");
 
-
   document.getElementById(
     "balanceDisplay"
   ).textContent =
-    Number(currentUser.balance || 0)
-      .toLocaleString("en-US");
+    formatNumber(currentUser.balance);
 }
 
 
-// ===============================
+// ============================================================
 // LISTINGS
-// ===============================
+// ============================================================
 
-function loadListings() {
+async function loadListings() {
 
-  localListings = JSON.parse(
-    localStorage.getItem(
-      "lot_listings"
-    ) || "[]"
-  );
+  try {
+
+    const snapshot =
+      await db
+        .collection("listings")
+        .orderBy("createdAt", "desc")
+        .get();
+
+    localListings =
+      snapshot.docs.map(doc => ({
+
+        id: doc.id,
+
+        ...doc.data()
+      }));
+
+  } catch (error) {
+
+    console.error(error);
+
+    // Fallback if old/test documents don't have createdAt.
+    const snapshot =
+      await db
+        .collection("listings")
+        .get();
+
+    localListings =
+      snapshot.docs.map(doc => ({
+
+        id: doc.id,
+
+        ...doc.data()
+      }));
+  }
 }
 
 
-// ===============================
+// ============================================================
 // MARKETPLACE
-// ===============================
+// ============================================================
 
 function renderMarketplace() {
 
   const container =
-    document.getElementById(
-      "marketplaceItems"
-    );
+    document.getElementById("marketplaceItems");
 
   if (!container) return;
 
-
   const searchInput =
-    document.getElementById(
-      "searchInput"
-    );
+    document.getElementById("searchInput");
 
   const categoryInput =
-    document.getElementById(
-      "categoryFilter"
-    );
-
+    document.getElementById("categoryFilter");
 
   const search =
     searchInput
       ? searchInput.value.toLowerCase()
       : "";
 
-
   const category =
     categoryInput
       ? categoryInput.value
       : "all";
-
 
   const listings =
     localListings.filter(item => {
@@ -400,31 +478,26 @@ function renderMarketplace() {
       if (item.active === false)
         return false;
 
-
       const text = (
-        item.name +
+        (item.name || "") +
         " " +
-        item.seller +
+        (item.seller || "") +
         " " +
         (item.description || "")
       ).toLowerCase();
 
-
       const searchMatch =
         text.includes(search);
-
 
       const categoryMatch =
         category === "all" ||
         item.category === category;
-
 
       return (
         searchMatch &&
         categoryMatch
       );
     });
-
 
   if (!listings.length) {
 
@@ -444,7 +517,6 @@ function renderMarketplace() {
     return;
   }
 
-
   container.innerHTML =
     listings.map(item => `
 
@@ -453,18 +525,18 @@ function renderMarketplace() {
         <img
           class="item-image"
           src="${escapeHTML(item.image || "")}"
-          alt="${escapeHTML(item.name)}"
+          alt="${escapeHTML(item.name || "")}"
         >
 
         <div class="item-content">
 
           <h3>
-            ${escapeHTML(item.name)}
+            ${escapeHTML(item.name || "")}
           </h3>
 
           <p class="seller">
             Seller:
-            ${escapeHTML(item.seller)}
+            ${escapeHTML(item.seller || "")}
           </p>
 
           <p class="seller">
@@ -485,11 +557,11 @@ function renderMarketplace() {
 
           <button
             class="buy-btn"
-            onclick="openPurchase(${item.id})"
-            ${item.stock <= 0 ? "disabled" : ""}
+            onclick="openPurchase('${item.id}')"
+            ${Number(item.stock) <= 0 ? "disabled" : ""}
           >
             ${
-              item.stock <= 0
+              Number(item.stock) <= 0
                 ? "Out of Stock"
                 : "Buy Now"
             }
@@ -503,87 +575,63 @@ function renderMarketplace() {
 }
 
 
-// ===============================
+// ============================================================
 // CREATE LISTING
-// ===============================
+// ============================================================
 
-function createListing() {
+async function createListing() {
 
   if (!currentUser) {
     toast("Please login first.");
     return;
   }
 
-
   const name =
-    document.getElementById(
-      "itemName"
-    ).value.trim();
-
+    document.getElementById("itemName").value.trim();
 
   const price =
     Number(
-      document.getElementById(
-        "itemPrice"
-      ).value
+      document.getElementById("itemPrice").value
     );
-
 
   const stock =
     Number(
-      document.getElementById(
-        "itemStock"
-      ).value
+      document.getElementById("itemStock").value
     );
 
-
   const category =
-    document.getElementById(
-      "itemCategory"
-    ).value;
-
+    document.getElementById("itemCategory").value;
 
   const description =
-    document.getElementById(
-      "itemDescription"
-    ).value.trim();
-
+    document.getElementById("itemDescription").value.trim();
 
   const file =
-    document.getElementById(
-      "itemImage"
-    ).files[0];
-
+    document.getElementById("itemImage").files[0];
 
   if (!name) {
     toast("Enter an item name.");
     return;
   }
 
-
   if (price <= 0) {
     toast("Enter a valid price.");
     return;
   }
-
 
   if (stock <= 0) {
     toast("Enter a valid stock amount.");
     return;
   }
 
-
   if (!file) {
     toast("Please select an image.");
     return;
   }
 
-
   if (file.size > 5 * 1024 * 1024) {
     toast("Image must be under 5MB.");
     return;
   }
-
 
   const allowed = [
     "image/jpeg",
@@ -591,22 +639,20 @@ function createListing() {
     "image/webp"
   ];
 
-
   if (!allowed.includes(file.type)) {
     toast("Only JPG, PNG and WEBP are allowed.");
     return;
   }
 
+  try {
 
-  const reader =
-    new FileReader();
+    toast("Publishing...");
 
-
-  reader.onload = function () {
+    // Compress image so it can safely fit in Firestore.
+    const imageData =
+      await compressImage(file);
 
     const listing = {
-
-      id: Date.now(),
 
       name: name,
 
@@ -618,7 +664,7 @@ function createListing() {
 
       category: category,
 
-      image: reader.result,
+      image: imageData,
 
       seller: currentUser.username,
 
@@ -628,59 +674,153 @@ function createListing() {
 
       sold: 0,
 
-      earned: 0
+      earned: 0,
+
+      createdAt:
+        firebase.firestore.FieldValue.serverTimestamp()
     };
 
+    await db
+      .collection("listings")
+      .add(listing);
 
-    localListings.push(listing);
+    document.getElementById("itemName").value = "";
+    document.getElementById("itemPrice").value = "";
+    document.getElementById("itemStock").value = "";
+    document.getElementById("itemDescription").value = "";
+    document.getElementById("itemImage").value = "";
 
-
-    localStorage.setItem(
-      "lot_listings",
-      JSON.stringify(localListings)
-    );
-
-
-    document.getElementById(
-      "itemName"
-    ).value = "";
-
-    document.getElementById(
-      "itemPrice"
-    ).value = "";
-
-    document.getElementById(
-      "itemStock"
-    ).value = "";
-
-    document.getElementById(
-      "itemDescription"
-    ).value = "";
-
-    document.getElementById(
-      "itemImage"
-    ).value = "";
-
+    await loadListings();
 
     renderMarketplace();
-
     renderDashboard();
 
     toast("Item published!");
-  };
 
+  } catch (error) {
 
-  reader.readAsDataURL(file);
+    console.error(error);
+
+    toast(
+      error.message ||
+      "Could not publish item."
+    );
+  }
 }
 
 
-// ===============================
+// ============================================================
+// IMAGE COMPRESSION
+// ============================================================
+
+function compressImage(file) {
+
+  return new Promise((resolve, reject) => {
+
+    const reader = new FileReader();
+
+    reader.onload = function () {
+
+      const img = new Image();
+
+      img.onload = function () {
+
+        const maxSize = 900;
+
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+
+          if (width > maxSize) {
+            height =
+              Math.round(
+                height * maxSize / width
+              );
+
+            width = maxSize;
+          }
+
+        } else {
+
+          if (height > maxSize) {
+            width =
+              Math.round(
+                width * maxSize / height
+              );
+
+            height = maxSize;
+          }
+        }
+
+        const canvas =
+          document.createElement("canvas");
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx =
+          canvas.getContext("2d");
+
+        ctx.drawImage(
+          img,
+          0,
+          0,
+          width,
+          height
+        );
+
+        let quality = 0.75;
+
+        let result =
+          canvas.toDataURL(
+            "image/jpeg",
+            quality
+          );
+
+        // Keep reducing if necessary.
+        while (
+          result.length > 850000 &&
+          quality > 0.25
+        ) {
+
+          quality -= 0.1;
+
+          result =
+            canvas.toDataURL(
+              "image/jpeg",
+              quality
+            );
+        }
+
+        if (result.length > 900000) {
+          reject(
+            new Error(
+              "Image is too large. Please use a smaller image."
+            )
+          );
+
+          return;
+        }
+
+        resolve(result);
+      };
+
+      img.onerror = reject;
+
+      img.src = reader.result;
+    };
+
+    reader.onerror = reject;
+
+    reader.readAsDataURL(file);
+  });
+}
+
+
+// ============================================================
 // PURCHASE
-// ===============================
-
-let selectedItem = null;
-let purchaseInProgress = false;
-
+// ============================================================
 
 function openPurchase(id) {
 
@@ -689,65 +829,53 @@ function openPurchase(id) {
       x => x.id === id
     );
 
-
   if (!item) return;
 
-
-  if (item.stock <= 0) {
+  if (Number(item.stock) <= 0) {
     toast("Out of stock.");
     return;
   }
 
-
   if (
-    item.seller ===
-    currentUser.username
+    item.sellerId === currentUser.id ||
+    item.seller === currentUser.username
   ) {
     toast("You cannot buy your own item.");
     return;
   }
 
-
   selectedItem = item;
-
 
   document.getElementById(
     "purchaseName"
   ).textContent =
     "Purchase " + item.name + "?";
 
-
   document.getElementById(
     "purchasePrice"
   ).textContent =
     formatNumber(item.price);
-
 
   document.getElementById(
     "purchaseStock"
   ).textContent =
     item.stock;
 
-
   document.getElementById(
     "purchaseBalance"
   ).textContent =
     formatNumber(currentUser.balance);
-
 
   document.getElementById(
     "purchaseRemaining"
   ).textContent =
     formatNumber(
       currentUser.balance -
-      item.price
+      Number(item.price)
     );
 
-
   document
-    .getElementById(
-      "purchaseModal"
-    )
+    .getElementById("purchaseModal")
     .classList.add("active");
 }
 
@@ -755,475 +883,150 @@ function openPurchase(id) {
 function closePurchase() {
 
   document
-    .getElementById(
-      "purchaseModal"
-    )
+    .getElementById("purchaseModal")
     .classList.remove("active");
 
   selectedItem = null;
 }
 
 
-function confirmPurchase() {
+// ============================================================
+// CONFIRM PURCHASE
+// ============================================================
+
+async function confirmPurchase() {
 
   if (
     purchaseInProgress ||
-    !selectedItem
+    !selectedItem ||
+    !currentUser
   ) return;
 
-
   purchaseInProgress = true;
-
 
   const button =
     document.getElementById(
       "confirmPurchaseButton"
     );
-
 
   button.disabled = true;
   button.textContent = "Processing...";
 
-
-  const item =
-    localListings.find(
-      x => x.id === selectedItem.id
-    );
-
-
-  if (!item) {
-
-    toast("Item no longer exists.");
-
-    finishPurchase();
-
-    return;
-  }
-
-
-  if (item.stock <= 0) {
-
-    toast("Out of stock.");
-
-    finishPurchase();
-
-    return;
-  }
-
-
-  if (
-    currentUser.balance <
-    item.price
-  ) {
-
-    toast("Insufficient LOT balance.");
-
-    finishPurchase();
-
-    return;
-  }
-
-
-  currentUser.balance -=
-    item.price;
-
-
-  item.stock--;
-
-  item.sold =
-    (item.sold || 0) + 1;
-
-  item.earned =
-    (item.earned || 0) +
-    item.price;
-
-
-  localStorage.setItem(
-    "lot_listings",
-    JSON.stringify(localListings)
-  );
-
-
-  sessionStorage.setItem(
-    "lot_current_user",
-    JSON.stringify(currentUser)
-  );
-
-
-  updateAccount();
-
-  renderMarketplace();
-
-  renderDashboard();
-
-  closePurchase();
-
-  toast("Purchase successful!");
-
-
-  finishPurchase();
-}
-
-
-function finishPurchase() {
-
-  purchaseInProgress = false;
-
-  const button =
-    document.getElementById(
-      "confirmPurchaseButton"
-    );
-
-  if (button) {
-
-    button.disabled = false;
-
-    button.textContent =
-      "Confirm Purchase";
-  }
-}
-
-
-// ===============================
-// DASHBOARD
-// ===============================
-
-function renderDashboard() {
-
-  if (!currentUser) return;
-
-
-  const mine =
-    localListings.filter(
-      item =>
-        item.seller ===
-        currentUser.username
-    );
-
-
-  const stats =
-    document.getElementById(
-      "stats"
-    );
-
-
-  if (stats) {
-
-    stats.innerHTML = `
-
-      <div class="stat">
-        <small class="muted">
-          Balance
-        </small>
-        <b>
-          ${formatNumber(currentUser.balance)}
-        </b>
-      </div>
-
-      <div class="stat">
-        <small class="muted">
-          Listings
-        </small>
-        <b>
-          ${mine.length}
-        </b>
-      </div>
-
-      <div class="stat">
-        <small class="muted">
-          Purchases
-        </small>
-        <b>
-          ${currentUser.purchases || 0}
-        </b>
-      </div>
-
-      <div class="stat">
-        <small class="muted">
-          Sales
-        </small>
-        <b>
-          ${mine.reduce(
-            (a, x) => a + (x.sold || 0),
-            0
-          )}
-        </b>
-      </div>
-
-    `;
-  }
-
-
-  const listings =
-    document.getElementById(
-      "myListings"
-    );
-
-
-  if (!listings) return;
-
-
-  if (!mine.length) {
-
-    listings.innerHTML =
-      `<p class="muted">
-        You have no listings yet.
-      </p>`;
-
-    return;
-  }
-
-
-  listings.innerHTML =
-    mine.map(item => `
-
-      <div class="listing-row">
-
-        <div>
-
-          <b>
-            ${escapeHTML(item.name)}
-          </b>
-
-          <br>
-
-          <small class="muted">
-
-            ${formatNumber(item.price)}
-            LOT ·
-
-            Stock:
-            ${item.stock}
-
-            · Sold:
-            ${item.sold || 0}
-
-          </small>
-
-        </div>
-
-        <button
-          class="secondary"
-          onclick="toggleListing(${item.id})"
-        >
-          ${
-            item.active === false
-              ? "Enable"
-              : "Disable"
+  try {
+
+    const buyerRef =
+      db.collection("users")
+        .doc(currentUser.id);
+
+    const listingRef =
+      db.collection("listings")
+        .doc(selectedItem.id);
+
+    await db.runTransaction(
+      async transaction => {
+
+        const listingDoc =
+          await transaction.get(listingRef);
+
+        if (!listingDoc.exists) {
+          throw new Error(
+            "Item no longer exists."
+          );
+        }
+
+        const item =
+          listingDoc.data();
+
+        const price =
+          Number(item.price || 0);
+
+        const stock =
+          Number(item.stock || 0);
+
+        if (item.active === false) {
+          throw new Error(
+            "This listing is disabled."
+          );
+        }
+
+        if (stock <= 0) {
+          throw new Error(
+            "Out of stock."
+          );
+        }
+
+        if (
+          item.sellerId === currentUser.id
+        ) {
+          throw new Error(
+            "You cannot buy your own item."
+          );
+        }
+
+        const buyerDoc =
+          await transaction.get(buyerRef);
+
+        if (!buyerDoc.exists) {
+          throw new Error(
+            "Buyer account not found."
+          );
+        }
+
+        const buyer =
+          buyerDoc.data();
+
+        const buyerBalance =
+          Number(buyer.balance || 0);
+
+        if (buyerBalance < price) {
+          throw new Error(
+            "Insufficient LOT balance."
+          );
+        }
+
+        // Seller account.
+        const sellerRef =
+          db.collection("users")
+            .doc(item.sellerId);
+
+        const sellerDoc =
+          await transaction.get(sellerRef);
+
+        if (!sellerDoc.exists) {
+          throw new Error(
+            "Seller account not found."
+          );
+        }
+
+        const seller =
+          sellerDoc.data();
+
+        const sellerBalance =
+          Number(seller.balance || 0);
+
+        // Buyer loses LOT.
+        transaction.update(
+          buyerRef,
+          {
+            balance:
+              buyerBalance - price,
+
+            purchases:
+              Number(buyer.purchases || 0) + 1
           }
-        </button>
-
-        <button
-          class="danger"
-          onclick="removeListing(${item.id})"
-        >
-          Remove
-        </button>
-
-      </div>
-
-    `).join("");
-}
-
-
-// ===============================
-// LISTING CONTROLS
-// ===============================
-
-function toggleListing(id) {
-
-  const item =
-    localListings.find(
-      x => x.id === id
-    );
-
-
-  if (!item) return;
-
-
-  if (
-    !currentUser.isAdmin &&
-    item.seller !==
-      currentUser.username
-  ) {
-
-    toast("You cannot modify this listing.");
-
-    return;
-  }
-
-
-  item.active =
-    item.active === false;
-
-
-  localStorage.setItem(
-    "lot_listings",
-    JSON.stringify(localListings)
-  );
-
-
-  renderMarketplace();
-
-  renderDashboard();
-
-  toast(
-    item.active
-      ? "Listing enabled."
-      : "Listing disabled."
-  );
-}
-
-
-function removeListing(id) {
-
-  const item =
-    localListings.find(
-      x => x.id === id
-    );
-
-
-  if (!item) return;
-
-
-  if (
-    !currentUser.isAdmin &&
-    item.seller !==
-      currentUser.username
-  ) {
-
-    toast("You cannot remove this listing.");
-
-    return;
-  }
-
-
-  if (
-    !confirm(
-      `Remove "${item.name}"?`
-    )
-  ) return;
-
-
-  localListings =
-    localListings.filter(
-      x => x.id !== id
-    );
-
-
-  localStorage.setItem(
-    "lot_listings",
-    JSON.stringify(localListings)
-  );
-
-
-  renderMarketplace();
-
-  renderDashboard();
-
-  toast("Listing removed.");
-}
-
-
-// ===============================
-// UTILITIES
-// ===============================
-
-function formatNumber(number) {
-
-  return Number(
-    number || 0
-  ).toLocaleString("en-US");
-}
-
-
-function escapeHTML(value) {
-
-  return String(
-    value || ""
-  ).replace(
-    /[&<>"']/g,
-    char => ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#039;"
-    })[char]
-  );
-}
-
-
-function toast(message) {
-
-  const element =
-    document.getElementById(
-      "toast"
-    );
-
-
-  if (!element) {
-    alert(message);
-    return;
-  }
-
-
-  element.textContent =
-    message;
-
-
-  element.classList.add(
-    "show"
-  );
-
-
-  setTimeout(
-    () =>
-      element.classList.remove(
-        "show"
-      ),
-    2500
-  );
-}
-
-
-// ===============================
-// STARTUP
-// ===============================
-
-document.addEventListener(
-  "DOMContentLoaded",
-  function () {
-
-    const saved =
-      sessionStorage.getItem(
-        "lot_current_user"
-      );
-
-
-    if (saved) {
-
-      try {
-
-        currentUser =
-          JSON.parse(saved);
-
-        enterMarketplace();
-
-      } catch {
-
-        sessionStorage.removeItem(
-          "lot_current_user"
         );
 
-        showAuth("login");
-      }
+        // Seller receives LOT.
+        transaction.update(
+          sellerRef,
+          {
+            balance:
+              sellerBalance + price
+          }
+        );
 
-    } else {
-
-      showAuth("login");
-
-    }
-
-  }
-);
+        // Update listing.
+        transaction.update(
+          listingRef,
+          {
+   
