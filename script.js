@@ -1028,22 +1028,4 @@ async function confirmPurchase() {
         // Update listing.
         transaction.update(
           listingRef,
-          {
-   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-
-<script>
-  const firebaseConfig = {
-    apiKey: "AIzaSyD89JlsSXpaAse-ZgUXnlUIqqlTPe-6Bys",
-    authDomain: "lotapimain.firebaseapp.com",
-    projectId: "lotapimain",
-    storageBucket: "lotapimain.firebasestorage.app",
-    messagingSenderId: "909823166989",
-    appId: "1:909823166989:web:288001e0e37c2fa7282344"
-  };
-
-  firebase.initializeApp(firebaseConfig);
-</script>
-
-<script src="script.js"></script>
+          { 
