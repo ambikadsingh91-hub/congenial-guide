@@ -1,3 +1,15 @@
+// ===============================
+// FIREBASE CONFIG — ADD ONLY
+// ===============================
+
+const firebaseConfig = {
+  apiKey: "AIzaSyD89JlsSXpaAse-ZgUXnlUIqqlTPe-6Bys",
+  authDomain: "lotapimain.firebaseapp.com",
+  projectId: "lotapimain",
+  storageBucket: "lotapimain.firebasestorage.app",
+  messagingSenderId: "909823166989",
+  appId: "1:909823166989:web:288001e0e37c2fa7282344"
+};
 // LOT SHOP - FIXED AUTHENTICATION VERSION
 
 let currentUser = null;
